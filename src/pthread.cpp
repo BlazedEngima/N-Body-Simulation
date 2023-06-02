@@ -32,9 +32,17 @@ void generate_data(double *m, double *x,double *y,double *vx,double *vy, int n, 
     // TODO: Generate proper initial position and mass for better visualization
     srand((unsigned)time(NULL));
     for (int i = 0; i < n; i++) {
-        m[i] = rand() % max_mass + 1.0f;
+        m[i] = rand() % (max_mass - min_mass) + min_mass;
+        // x[i] = rand() % bound_x;
+        // y[i] = rand() % bound_y;
+        
+        // For collision logic (fast paced)
         x[i] = 2000.0f + rand() % (bound_x / 4);
         y[i] = 2000.0f + rand() % (bound_y / 4);
+
+        // x[i] = 3000.0f + rand() % (bound_x / 4);
+        // y[i] = 3000.0f + rand() % (bound_y / 4);
+
         vx[i] = 0.0f;
         vy[i] = 0.0f;
 
@@ -102,17 +110,16 @@ void interaction(my_Body& ori, my_Body& ori_new, my_Body& ori_pair) {
 }
 
 typedef struct {
-    //TODO: specify your arguments for threads
+    // Arguments for threads
     int start_body;
     int body_num;
     my_Body* ori_body;
     my_Body* new_body;
-    //TODO END
 } Args;
 
 
 void* worker(void* args) {
-    //TODO: procedure in each threads
+    // Main thread routine
     Args* my_arg = (Args*) args;
     int s_body = my_arg->start_body;
     int num_body = my_arg->body_num;
@@ -121,16 +128,15 @@ void* worker(void* args) {
     my_Body* ori_body = my_arg->ori_body;
     my_Body* new_body = my_arg->new_body;
 
-    for (int i = s_body; i < e_body; i++){
+    for (int i = s_body; i < e_body; i++) {
         ori_body[i].ax = ori_body[i].ay = 0.0;
         new_body[i] = ori_body[i]; 
-        for (int j = 0; j < n_body; j++){
+        for (int j = 0; j < n_body; j++) {
             if (i == j) continue;
             interaction(ori_body[i],new_body[i],ori_body[j]);
         }
         update_data(new_body[i]);
     }
-    // TODO END
 }
 
 
@@ -145,22 +151,22 @@ void master(){
 
     generate_data(m, x, y, vx, vy, n_body, ori_body);
 
-    Logger l = Logger("sequential", n_body, bound_x, bound_y);
+    Logger l = Logger("Pthread", n_body, bound_x, bound_y);
 
-    for (int i = 0; i < n_iteration; i++){
+    for (int i = 0; i < n_iteration; i++) {
         std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
-        //TODO: assign jobs
+        //Assigning Jobs
         pthread_t thds[n_thd]; // thread pool
         Args args[n_thd]; // arguments for all threads
         my_Body* new_body = new my_Body[n_body]; // store the body data after the iteration
         int temp_sum = 0;
-        for (int thd = 0; thd < n_thd; thd++){
+        for (int thd = 0; thd < n_thd; thd++) {
             args[thd].start_body = temp_sum;
-            if (thd == n_thd-1){
-                args[thd].body_num = n_body-temp_sum;
+            if (thd == n_thd - 1) {
+                args[thd].body_num = n_body - temp_sum;
             }
-            else{
-                args[thd].body_num = n_body/n_thd;
+            else {
+                args[thd].body_num = n_body / n_thd;
             }
             temp_sum += args[thd].body_num;
             args[thd].ori_body = ori_body;
@@ -179,7 +185,6 @@ void master(){
             vx[i] = ori_body[i].vx;
             vy[i] = ori_body[i].vy;
         }
-        //TODO End
 
         std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> time_span = t2 - t1;
