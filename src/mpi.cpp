@@ -23,8 +23,7 @@ int world_size;
 
 double total_time;
 
-typedef struct 
-{
+typedef struct {
     double x, y;  // position
     double vx, vy;  // velocity
     double m;  // mass
@@ -33,7 +32,7 @@ typedef struct
 
 MPI_Datatype MPI_BODY;
 
-void create_mpi_type(){
+void create_mpi_type() {
 	MPI_Datatype array_of_types[7] = {MPI_DOUBLE,MPI_DOUBLE,MPI_DOUBLE,MPI_DOUBLE,MPI_DOUBLE,MPI_DOUBLE,MPI_DOUBLE};
 	int blocklen[7] = {1,1,1,1,1,1,1};
 	MPI_Aint array_of_displacements[7];
@@ -43,8 +42,8 @@ void create_mpi_type(){
 	MPI_Get_address(&temp.x,&addresses[0]);
 	MPI_Get_address(&temp.y,&addresses[1]);
 	MPI_Get_address(&temp.vx,&addresses[2]);
-    	MPI_Get_address(&temp.vy,&addresses[3]);
-    	MPI_Get_address(&temp.ax,&addresses[4]);
+	MPI_Get_address(&temp.vy,&addresses[3]);
+    MPI_Get_address(&temp.ax,&addresses[4]);
 	MPI_Get_address(&temp.ay,&addresses[5]);
 	MPI_Get_address(&temp.m,&addresses[6]);
 	MPI_Get_address(&temp,&addr_start);
@@ -79,7 +78,7 @@ void generate_data(double *m, double *x,double *y,double *vx,double *vy, int n) 
     }
 }
 
-void wall_collision(my_Body& body){
+void wall_collision(my_Body& body) {
     double r = sqrt(radius2);
     if (body.x <= r) {
         body.x = r + err;
@@ -111,10 +110,12 @@ void interaction(my_Body& ori, my_Body& ori_new, my_Body& ori_pair) {
     double delta_y = ori.y - ori_pair.y;
     double dist_s = delta_x*delta_x + delta_y*delta_y;
     bool isCollision = false;
+
     if (dist_s <= radius2*4) {
         dist_s = radius2*4;
         isCollision = true;
     } // collision happens
+
     double dist = sqrt(dist_s);
 
     if (isCollision) {
@@ -125,6 +126,7 @@ void interaction(my_Body& ori, my_Body& ori_new, my_Body& ori_pair) {
         
         ori_new.x += delta_x / dist * sqrt(radius2) / 2.0;
         ori_new.y += delta_y / dist * sqrt(radius2) / 2.0;
+
     } else {
         double F = ori.m*ori_pair.m*gravity_const / dist_s;
         ori_new.ax -= F * delta_x / ori.m;
@@ -178,7 +180,6 @@ int main(int argc, char *argv[]) {
 		for (int i = 0; i < n_iteration; i++) {
 		    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 
-		    // TODO: MPI routine
 		    MPI_Bcast(total_m,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
 		    MPI_Bcast(total_x,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
 		    MPI_Bcast(total_y,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
@@ -186,18 +187,19 @@ int main(int argc, char *argv[]) {
 		    MPI_Bcast(total_vy,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
 
 		    for (int j = 0; j < total_size; j++) {
-			if (j >= n_body) {
-			    ori_data[j].m = 0.0;
-			    ori_data[j].x = 0.0;
-			    ori_data[j].y = 0.0;
-			    ori_data[j].vx = 0.0;
-			    ori_data[j].vy = 0.0;
-			} // pixels that do not exist.
-			ori_data[j].m = total_m[j];
-			ori_data[j].x = total_x[j];
-			ori_data[j].y = total_y[j];
-			ori_data[j].vx = total_vx[j];
-			ori_data[j].vy = total_vy[j];
+				if (j >= n_body) {
+					ori_data[j].m = 0.0;
+					ori_data[j].x = 0.0;
+					ori_data[j].y = 0.0;
+					ori_data[j].vx = 0.0;
+					ori_data[j].vy = 0.0;
+				} // pixels that do not exist.
+
+				ori_data[j].m = total_m[j];
+				ori_data[j].x = total_x[j];
+				ori_data[j].y = total_y[j];
+				ori_data[j].vx = total_vx[j];
+				ori_data[j].vy = total_vy[j];
 		    }
 
 		    int offset = local_size*my_rank;
@@ -215,11 +217,12 @@ int main(int argc, char *argv[]) {
 		    double* local_y = new double[local_size];
 		    double* local_vx = new double[local_size];
 		    double* local_vy = new double[local_size];
+
 		    for (int j = offset; j < std::min(offset + local_size, n_body); j++) {
-			local_x[j-offset] = new_data[j].x;
-			local_y[j-offset] = new_data[j].y;
-			local_vx[j-offset] = new_data[j].vx;
-			local_vy[j-offset] = new_data[j].vy;
+				local_x[j-offset] = new_data[j].x;
+				local_y[j-offset] = new_data[j].y;
+				local_vx[j-offset] = new_data[j].vx;
+				local_vy[j-offset] = new_data[j].vy;
 		    }
 
 		    MPI_Gather(local_x,local_size,MPI_DOUBLE,calc_x,local_size,MPI_DOUBLE,0,MPI_COMM_WORLD);
@@ -233,10 +236,10 @@ int main(int argc, char *argv[]) {
 		    delete[] local_vy;
 
 		    for (int j = 0; j < n_body; j++) {
-			total_x[j] = calc_x[j];
-			total_y[j] = calc_y[j];
-			total_vx[j] = calc_vx[j];
-			total_vy[j] = calc_vy[j];
+				total_x[j] = calc_x[j];
+				total_y[j] = calc_y[j];
+				total_vx[j] = calc_vx[j];
+				total_vy[j] = calc_vy[j];
 		    }
 
 		    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -323,7 +326,6 @@ int main(int argc, char *argv[]) {
 		    delete[] local_vx;
 		    delete[] local_vy;
 		}
-        // TODO End
  	}
 
     delete[] total_m;
