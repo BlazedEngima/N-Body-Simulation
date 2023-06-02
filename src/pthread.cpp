@@ -20,8 +20,7 @@ int n_iteration;
 
 double total_time;
 
-typedef struct 
-{
+typedef struct {
     double x, y;  // position
     double vx, vy;  // velocity
     double m;  // mass
@@ -29,7 +28,6 @@ typedef struct
 } my_Body;
 
 void generate_data(double *m, double *x,double *y,double *vx,double *vy, int n, my_Body *pool) {
-    // TODO: Generate proper initial position and mass for better visualization
     srand((unsigned)time(NULL));
     for (int i = 0; i < n; i++) {
         m[i] = rand() % (max_mass - min_mass) + min_mass;
@@ -88,10 +86,12 @@ void interaction(my_Body& ori, my_Body& ori_new, my_Body& ori_pair) {
     double delta_y = ori.y - ori_pair.y;
     double dist_s = delta_x*delta_x + delta_y*delta_y;
     bool isCollision = false;
-    if (dist_s <= radius2*4){
+
+    if (dist_s <= radius2*4) {
         dist_s = radius2*4;
         isCollision = true;
     } // collision happens
+
     double dist = sqrt(dist_s);
 
     if (isCollision) {
@@ -102,6 +102,7 @@ void interaction(my_Body& ori, my_Body& ori_new, my_Body& ori_pair) {
         
         ori_new.x += delta_x / dist * sqrt(radius2) / 2.0;
         ori_new.y += delta_y / dist * sqrt(radius2) / 2.0;
+
     } else {
         double F = ori.m*ori_pair.m*gravity_const / dist_s;
         ori_new.ax -= F * delta_x / ori.m;
@@ -115,6 +116,7 @@ typedef struct {
     int body_num;
     my_Body* ori_body;
     my_Body* new_body;
+
 } Args;
 
 
@@ -131,6 +133,7 @@ void* worker(void* args) {
     for (int i = s_body; i < e_body; i++) {
         ori_body[i].ax = ori_body[i].ay = 0.0;
         new_body[i] = ori_body[i]; 
+
         for (int j = 0; j < n_body; j++) {
             if (i == j) continue;
             interaction(ori_body[i],new_body[i],ori_body[j]);
@@ -172,11 +175,11 @@ void master(){
             args[thd].ori_body = ori_body;
             args[thd].new_body = new_body;
         }
-
+        
         for (int thd = 0; thd < n_thd; thd++) pthread_create(&thds[thd], NULL, worker, &args[thd]);
 
         for (int thd = 0; thd < n_thd; thd++) pthread_join(thds[thd], NULL);
-
+        
         for (int i = 0; i < n_body; i++){
             ori_body[i] = new_body[i];
             m[i] = ori_body[i].m;
@@ -214,13 +217,12 @@ void master(){
         #endif
     }
 
+    delete[] ori_body;
     delete[] m;
     delete[] x;
     delete[] y;
     delete[] vx;
     delete[] vy;
-
-
 }
 
 
@@ -242,8 +244,8 @@ int main(int argc, char *argv[]) {
     total_time = 0.0;
     master();
 
-    printf("Student ID: 119010437\n"); // replace it with your student id
-    printf("Name: ZHANG Shiyi\n"); // replace it with your name
+    printf("Student ID: 119010545\n"); // replace it with your student id
+    printf("Name: Samuel Theofie\n"); // replace it with your name
     printf("Assignment 2: N Body Simulation Pthread Implementation\n");
     printf("Total running time: %.3f\n",total_time);
 	return 0;
