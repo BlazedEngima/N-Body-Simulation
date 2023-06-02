@@ -5,3 +5,6 @@
 #define dt 0.0001f
 #define gravity_const 1000000.0f
 #define radius2 0.01f
+#define min_x 1000
+#define min_y 1000
+#define min_mass 50
