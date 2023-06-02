@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <chrono>
+#include <tuple>
 #ifdef GUI
 #include <GL/glut.h>
 #include <GL/gl.h>
@@ -14,122 +15,123 @@
 int n_body;
 int n_iteration;
 
-double total_time;
 
 void generate_data(double *m, double *x,double *y,double *vx,double *vy, int n) {
-    // TODO: Generate proper initial position and mass for better visualization
+    // Generate proper initial position and mass for better visualization
     srand((unsigned)time(NULL));
     for (int i = 0; i < n; i++) {
-        m[i] = rand() % max_mass + 1.0f;
+        m[i] = rand() % (max_mass - min_mass) + min_mass;
+        // x[i] = rand() % bound_x;
+        // y[i] = rand() % bound_y;
+        
+        // For collision logic (fast paced)
         x[i] = 2000.0f + rand() % (bound_x / 4);
         y[i] = 2000.0f + rand() % (bound_y / 4);
+
+        // x[i] = 3000.0f + rand() % (bound_x / 4);
+        // y[i] = 3000.0f + rand() % (bound_y / 4);
+
         vx[i] = 0.0f;
         vy[i] = 0.0f;
     }
 }
 
 void update_position(double *x, double *y, double *vx, double *vy, int n) {
-    //TODO: update position 
-    for (int i = 0; i < n; i++)
-    {
-        x[i] += vx[i]*dt;
-        y[i] += vy[i]*dt;
+    // Update position 
+    for (size_t i = 0; i < n; i++) {
+        x[i] = x[i] + (vx[i] * dt);
+        y[i] = y[i] + (vy[i] * dt);
 
         double r = sqrt(radius2);
-        if (x[i] <= r){
+
+        // Border collision logic
+        if (x[i] <= r) {
             x[i] = r + err;
             vx[i] = -vx[i];
         }
-        else if (x[i] >= bound_x-r){
+        else if (x[i] >= bound_x-r) {
             x[i] = bound_x - r - err;
             vx[i] = -vx[i];
         }
-        if (y[i] <= r){
+        if (y[i] <= r) {
             y[i] = r + err;
             vy[i] = -vy[i];
         }
-        else if (y[i] >= bound_y-r){
+        else if (y[i] >= bound_y-r) {
             y[i] = bound_y - r - err;
             vy[i] = -vy[i];
-        } // handle wall collision
+        }
+
     }
+
 }
 
 void update_velocity(double *m, double *x, double *y, double *vx, double *vy, int n) {
-    //TODO: calculate force and acceleration, update velocity
-    double* Fx = new double[n];
-    double* Fy = new double[n];
-    for(int i = 0; i < n; i++){
-        Fx[i] = 0.0;
-        Fy[i] = 0.0;
-    } // initialize the acceleration
-
-    for (int i = 0; i < n; i++){
-        for (int j = i + 1; j < n; j++){
-            double delta_x = x[i] - x[j];
-            double delta_y = y[i] - y[j];
-            double dist_s = delta_x*delta_x + delta_y*delta_y;
-            bool isCollision = false;
-            if (dist_s <= radius2*4){
-                dist_s = radius2*4;
-                isCollision = true;
-            } // collision happens
-            double dist = sqrt(dist_s);
-
-            if (isCollision){
-                double dot_product = delta_x*(vx[i]-vx[j]) + delta_y*(vy[i]-vy[j]);
-                double value = 2 / (m[i]+m[j]) * dot_product / dist_s;
-                vx[i] -= value * delta_x * m[j];
-                vy[i] -= value * delta_y * m[j];
-                vx[j] += value * delta_x * m[i];
-                vy[j] += value * delta_y * m[i]; // conservation of momentum
-
-                x[i] += delta_x / dist * sqrt(radius2) / 2.0;
-                y[i] += delta_y / dist * sqrt(radius2) / 2.0;
-                x[j] -= delta_x / dist * sqrt(radius2) / 2.0;
-                y[j] -= delta_y / dist * sqrt(radius2) / 2.0; // considering the collision volume
-            } // if collision happened, ignore the force between the collision pair.
-            else{
-                double F = m[i]*m[j]*gravity_const / dist_s; // calculate the force
-                Fx[i] -= (F / m[i]) * delta_x;
-                Fy[i] -= (F / m[i]) * delta_y;
-                Fx[j] += (F / m[j]) * delta_x;
-                Fy[j] += (F / m[j]) * delta_y;
-            } // update the component of acceleration
-        }
-    } // calculate acceleration
+    double *ax = new double[n] ();
+    double *ay = new double[n] ();
     
-    for (int i = 0; i < n; i++){
-        vx[i] += Fx[i]*dt;
-        vy[i] += Fy[i]*dt;
-    } // update the velocity
-    
-    delete[] Fx;
-    delete[] Fy;
+    // Calculate force and acceleration, update velocity
+    for (size_t i = 0; i < n; i++) {
+        for (size_t j = i + 1; j < n; j++) {
+            if (i == j) continue;
 
-    for (int i = 0; i < n; i++){
-        double r = sqrt(radius2);
-        if (x[i] <= r){
-            x[i] = r + err;
-            vx[i] = -vx[i];
+            // Calculate the acceleration
+            double deltaX = x[i] - x[j];
+            double deltaY = y[i] - y[j];
+            double r_2 = (deltaX * deltaX) + (deltaY * deltaY);
+
+            bool collision = false;
+
+            // Detect collision
+            if (r_2 <= radius2) {
+
+                collision = true;
+                r_2 = radius2;
+            }
+
+            double r = sqrt(r_2);
+
+            // No collisions
+            if (!collision) {
+                double F = m[i]*m[j]*gravity_const / r_2; // calculate the force
+                ax[i] -= (F / m[i]) * deltaX;
+                ay[i] -= (F / m[i]) * deltaY;
+                ax[j] += (F / m[j]) * deltaX;
+                ay[j] += (F / m[j]) * deltaY;
+
+            // Collision with other bodies ignore collision force
+            } else {
+                // Conservation of momentum
+                double dot = deltaX * (vx[i] - vx[j]) + deltaY * (vy[i] - vy[j]);
+                double val = 2 / (m[i] + m[j]) * dot / r_2;
+
+                // Get velocity from the conservation of momentum
+                vx[i] -= val * deltaX * m[j];
+                vy[i] -= val * deltaY * m[j];
+                vx[j] += val * deltaX * m[i];
+                vy[j] += val * deltaY * m[i];
+
+                // We consider the volume of a body and reduce that from the positions
+                x[i] += deltaX / r * sqrt(radius2) / 2.0;
+                y[i] += deltaY / r * sqrt(radius2) / 2.0;
+                x[j] -= deltaX / r * sqrt(radius2) / 2.0;
+                y[j] -= deltaY / r * sqrt(radius2) / 2.0;
+            }
         }
-        else if (x[i] >= bound_x-r){
-            x[i] = bound_x - r - err;
-            vx[i] = -vx[i];
-        }
-        if (y[i] <= r){
-            y[i] = r + err;
-            vy[i] = -vy[i];
-        }
-        else if (y[i] >= bound_y-r){
-            y[i] = bound_y - r - err;
-            vy[i] = -vy[i];
-        }
-    } // handle wall collsion (consider the collison volumn between pixels)
+    }
+
+    // Update velocity arrays
+    for (size_t i = 0; i < n; i++) {
+        vx[i] = vx[i] + (dt * ax[i]);
+        vy[i] = vy[i] + (dt * ay[i]);
+    }
+
+    delete[] ax;
+    delete[] ay;
 }
 
-
 void master() {
+    // Init data
     double* m = new double[n_body];
     double* x = new double[n_body];
     double* y = new double[n_body];
@@ -140,17 +142,20 @@ void master() {
 
     Logger l = Logger("sequential", n_body, bound_x, bound_y);
 
+    std::chrono::duration<double> total{};
+
     for (int i = 0; i < n_iteration; i++){
         std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 
+        // Main updating function
         update_velocity(m, x, y, vx, vy, n_body);
         update_position(x, y, vx, vy, n_body);
 
         std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> time_span = t2 - t1;
+        total += time_span;
 
-        printf("Iteration %d, elapsed time: %.3f\n", i, time_span);
-        total_time += time_span.count();
+        // printf("Iteration %d, elapsed time: %.3f\n", i, time_span);
 
         l.save_frame(x, y);
 
@@ -173,6 +178,8 @@ void master() {
 
         #endif
     }
+
+    printf("Elapsed time: %.5f\n", total.count());
 
     delete[] m;
     delete[] x;
@@ -197,16 +204,13 @@ int main(int argc, char *argv[]){
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     gluOrtho2D(0, bound_x, 0, bound_y);
     #endif
-    total_time = 0.0;
     master();
 
-    printf("Student ID: 119010437\n"); // replace it with your student id
-    printf("Name: ZHANG Shiyi\n"); // replace it with your name
+    printf("Student ID: 119010545\n");
+    printf("Name: Samuel Theofie\n");
     printf("Assignment 2: N Body Simulation Sequential Implementation\n");
-    printf("Total running time: %.3f\n",total_time);
+    printf("Number of bodies %d\n", n_body);
     
     return 0;
 
 }
-
-
