@@ -32,8 +32,6 @@ typedef struct
 } my_Body;
 
 MPI_Datatype MPI_BODY;
-// MPI_Type_contiguous(sizeof(my_Body) / sizeof(double), MPI_DOUBLE, &MPI_BODY);
-// MPI_Type_commit(&MPI_BODY);
 
 void create_mpi_type(){
 	MPI_Datatype array_of_types[7] = {MPI_DOUBLE,MPI_DOUBLE,MPI_DOUBLE,MPI_DOUBLE,MPI_DOUBLE,MPI_DOUBLE,MPI_DOUBLE};
@@ -45,34 +43,39 @@ void create_mpi_type(){
 	MPI_Get_address(&temp.x,&addresses[0]);
 	MPI_Get_address(&temp.y,&addresses[1]);
 	MPI_Get_address(&temp.vx,&addresses[2]);
-    MPI_Get_address(&temp.vy,&addresses[3]);
-    MPI_Get_address(&temp.ax,&addresses[4]);
-    MPI_Get_address(&temp.ay,&addresses[5]);
-    MPI_Get_address(&temp.m,&addresses[6]);
+    	MPI_Get_address(&temp.vy,&addresses[3]);
+    	MPI_Get_address(&temp.ax,&addresses[4]);
+	MPI_Get_address(&temp.ay,&addresses[5]);
+	MPI_Get_address(&temp.m,&addresses[6]);
 	MPI_Get_address(&temp,&addr_start);
 
 	// calculate byte displacement of each block (array of address integer)
 	array_of_displacements[0] = addresses[0] - addr_start;
 	array_of_displacements[1] = addresses[1] - addr_start;
 	array_of_displacements[2] = addresses[2] - addr_start;
-    array_of_displacements[3] = addresses[3] - addr_start;
-    array_of_displacements[4] = addresses[4] - addr_start;
-    array_of_displacements[5] = addresses[5] - addr_start;
-    array_of_displacements[6] = addresses[6] - addr_start;
+	array_of_displacements[3] = addresses[3] - addr_start;
+	array_of_displacements[4] = addresses[4] - addr_start;
+	array_of_displacements[5] = addresses[5] - addr_start;
+	array_of_displacements[6] = addresses[6] - addr_start;
 
 	MPI_Type_create_struct(7,blocklen,array_of_displacements,array_of_types,&MPI_BODY);
 	MPI_Type_commit(&MPI_BODY);
 }
 
 void generate_data(double *m, double *x,double *y,double *vx,double *vy, int n) {
-    // TODO: Generate proper initial position and mass for better visualization
+    // Generate proper initial position and mass for better visualization
     srand((unsigned)time(NULL));
     for (int i = 0; i < n; i++) {
-        m[i] = rand() % max_mass + 1.0f;
+        m[i] = rand() % (max_mass - min_mass) + min_mass;
+        // x[i] = rand() % bound_x;
+        // y[i] = rand() % bound_y;
+        
+        // For collision logic (fast paced)
         x[i] = 2000.0f + rand() % (bound_x / 4);
         y[i] = 2000.0f + rand() % (bound_y / 4);
-        vx[i] = 0.0f;
-        vy[i] = 0.0f;
+
+        // vx[i] = 0.0f;
+        // vy[i] = 0.0f;
     }
 }
 
@@ -108,7 +111,7 @@ void interaction(my_Body& ori, my_Body& ori_new, my_Body& ori_pair) {
     double delta_y = ori.y - ori_pair.y;
     double dist_s = delta_x*delta_x + delta_y*delta_y;
     bool isCollision = false;
-    if (dist_s <= radius2*4){
+    if (dist_s <= radius2*4) {
         dist_s = radius2*4;
         isCollision = true;
     } // collision happens
@@ -133,7 +136,7 @@ int main(int argc, char *argv[]) {
     n_body = atoi(argv[1]);
     n_iteration = atoi(argv[2]);
 
-	MPI_Init(&argc, &argv);
+    MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
@@ -166,175 +169,162 @@ int main(int argc, char *argv[]) {
 		gluOrtho2D(0, bound_x, 0, bound_y);
 		#endif
 
-        // create_mpi_type();
-        // printf("My MPI_TYPE_CREATE is ok\n");
-        total_time = 0.0;
-        
-        generate_data(total_m, total_x, total_y, total_vx, total_vy, n_body);
+		total_time = 0.0;
 
-        Logger l = Logger("sequential", n_body, bound_x, bound_y);
+		generate_data(total_m, total_x, total_y, total_vx, total_vy, n_body);
 
-        for (int i = 0; i < n_iteration; i++){
-            std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+		Logger l = Logger("MPI", n_body, bound_x, bound_y);
 
-            // TODO: MPI routine
-            MPI_Bcast(total_m,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
-            MPI_Bcast(total_x,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
-            MPI_Bcast(total_y,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
-            MPI_Bcast(total_vx,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
-            MPI_Bcast(total_vy,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
-            // printf("Master Bcast is ok\n");
+		for (int i = 0; i < n_iteration; i++) {
+		    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 
-            for (int j = 0; j < total_size; j++){
-                if (j >= n_body){
-                    ori_data[j].m = 0.0;
-                    ori_data[j].x = 0.0;
-                    ori_data[j].y = 0.0;
-                    ori_data[j].vx = 0.0;
-                    ori_data[j].vy = 0.0;
-                } // pixels that do not exist.
-                ori_data[j].m = total_m[j];
-                ori_data[j].x = total_x[j];
-                ori_data[j].y = total_y[j];
-                ori_data[j].vx = total_vx[j];
-                ori_data[j].vy = total_vy[j];
-            }
-            // printf("Master prepare is ok\n");
+		    // TODO: MPI routine
+		    MPI_Bcast(total_m,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		    MPI_Bcast(total_x,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		    MPI_Bcast(total_y,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		    MPI_Bcast(total_vx,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		    MPI_Bcast(total_vy,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
 
-            // MPI_Bcast(ori_data,total_size,MPI_BODY,0,MPI_COMM_WORLD);
-            // printf("Master Bcast is ok\n");
+		    for (int j = 0; j < total_size; j++) {
+			if (j >= n_body) {
+			    ori_data[j].m = 0.0;
+			    ori_data[j].x = 0.0;
+			    ori_data[j].y = 0.0;
+			    ori_data[j].vx = 0.0;
+			    ori_data[j].vy = 0.0;
+			} // pixels that do not exist.
+			ori_data[j].m = total_m[j];
+			ori_data[j].x = total_x[j];
+			ori_data[j].y = total_y[j];
+			ori_data[j].vx = total_vx[j];
+			ori_data[j].vy = total_vy[j];
+		    }
 
-            int offset = local_size*my_rank;
-            for (int j = offset; j < std::min(offset + local_size, n_body); j++){
-                ori_data[j].ax = ori_data[j].ay = 0.0;
-                new_data[j] = ori_data[j]; 
-                for (int p = 0; p < n_body; p++){
-                    if (p == j) continue;
-                    interaction(ori_data[j],new_data[j],ori_data[p]);
-                }
-                update_data(new_data[j]);
-            }
-            // printf("Master update is ok\n");
+		    int offset = local_size*my_rank;
+		    for (int j = offset; j < std::min(offset + local_size, n_body); j++) {
+			ori_data[j].ax = ori_data[j].ay = 0.0;
+			new_data[j] = ori_data[j]; 
+			for (int p = 0; p < n_body; p++) {
+			    if (p == j) continue;
+			    interaction(ori_data[j],new_data[j],ori_data[p]);
+			}
+			update_data(new_data[j]);
+		    }
 
-            double* local_x = new double[local_size];
-            double* local_y = new double[local_size];
-            double* local_vx = new double[local_size];
-            double* local_vy = new double[local_size];
-            for (int j = offset; j < std::min(offset + local_size, n_body); j++){
-                local_x[j-offset] = new_data[j].x;
-                local_y[j-offset] = new_data[j].y;
-                local_vx[j-offset] = new_data[j].vx;
-                local_vy[j-offset] = new_data[j].vy;
-            }
+		    double* local_x = new double[local_size];
+		    double* local_y = new double[local_size];
+		    double* local_vx = new double[local_size];
+		    double* local_vy = new double[local_size];
+		    for (int j = offset; j < std::min(offset + local_size, n_body); j++) {
+			local_x[j-offset] = new_data[j].x;
+			local_y[j-offset] = new_data[j].y;
+			local_vx[j-offset] = new_data[j].vx;
+			local_vy[j-offset] = new_data[j].vy;
+		    }
 
-            MPI_Gather(local_x,local_size,MPI_DOUBLE,calc_x,local_size,MPI_DOUBLE,0,MPI_COMM_WORLD);
-            MPI_Gather(local_y,local_size,MPI_DOUBLE,calc_y,local_size,MPI_DOUBLE,0,MPI_COMM_WORLD);
-            MPI_Gather(local_vx,local_size,MPI_DOUBLE,calc_vx,local_size,MPI_DOUBLE,0,MPI_COMM_WORLD);
-            MPI_Gather(local_vy,local_size,MPI_DOUBLE,calc_vy,local_size,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		    MPI_Gather(local_x,local_size,MPI_DOUBLE,calc_x,local_size,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		    MPI_Gather(local_y,local_size,MPI_DOUBLE,calc_y,local_size,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		    MPI_Gather(local_vx,local_size,MPI_DOUBLE,calc_vx,local_size,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		    MPI_Gather(local_vy,local_size,MPI_DOUBLE,calc_vy,local_size,MPI_DOUBLE,0,MPI_COMM_WORLD);
 
-            // MPI_Gather(new_data+offset,local_size,MPI_BODY,ori_data,local_size,MPI_BODY,0,MPI_COMM_WORLD);
-            // printf("Master gather is ok\n");
-            delete[] local_x;
-            delete[] local_y;
-            delete[] local_vx;
-            delete[] local_vy;
+		    delete[] local_x;
+		    delete[] local_y;
+		    delete[] local_vx;
+		    delete[] local_vy;
 
-            for (int j = 0; j < n_body; j++){
-                total_x[j] = calc_x[j];
-                total_y[j] = calc_y[j];
-                total_vx[j] = calc_vx[j];
-                total_vy[j] = calc_vy[j];
-            }
-            // TODO End
+		    for (int j = 0; j < n_body; j++) {
+			total_x[j] = calc_x[j];
+			total_y[j] = calc_y[j];
+			total_vx[j] = calc_vx[j];
+			total_vy[j] = calc_vy[j];
+		    }
 
-            std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-            std::chrono::duration<double> time_span = t2 - t1;
+		    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+		    std::chrono::duration<double> time_span = t2 - t1;
 
-            printf("Iteration %d, elapsed time: %.3f\n", i, time_span);
-            total_time += time_span.count();
+		    printf("Iteration %d, elapsed time: %.3f\n", i, time_span);
+		    total_time += time_span.count();
 
-            l.save_frame(total_x, total_y);
+		    l.save_frame(total_x, total_y);
 
-            #ifdef GUI
-            glClear(GL_COLOR_BUFFER_BIT);
-            glColor3f(1.0f, 0.0f, 0.0f);
-            glPointSize(2.0f);
-            glBegin(GL_POINTS);
-            double xi;
-            double yi;
-            for (int i = 0; i < n_body; i++){
-                xi = total_x[i];
-                yi = total_y[i];
-                glVertex2f(xi, yi);
-            }
-            glEnd();
-            glFlush();
-            glutSwapBuffers();
-            #else
+		    #ifdef GUI
+		    glClear(GL_COLOR_BUFFER_BIT);
+		    glColor3f(1.0f, 0.0f, 0.0f);
+		    glPointSize(2.0f);
+		    glBegin(GL_POINTS);
+		    double xi;
+		    double yi;
+		    for (int i = 0; i < n_body; i++) {
+			xi = total_x[i];
+			yi = total_y[i];
+			glVertex2f(xi, yi);
+		    }
+		    glEnd();
+		    glFlush();
+		    glutSwapBuffers();
+		    #else
 
-            #endif
-        }
+		    #endif
+		}
 
 	} else {
-        // TODO: MPI routine
-        for (int it = 0; it < n_iteration; it++){
-            MPI_Bcast(total_m,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
-            MPI_Bcast(total_x,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
-            MPI_Bcast(total_y,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
-            MPI_Bcast(total_vx,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
-            MPI_Bcast(total_vy,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		// MPI Routine
+		for (int it = 0; it < n_iteration; it++) {
+		    MPI_Bcast(total_m,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		    MPI_Bcast(total_x,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		    MPI_Bcast(total_y,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		    MPI_Bcast(total_vx,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		    MPI_Bcast(total_vy,n_body,MPI_DOUBLE,0,MPI_COMM_WORLD);
 
-            for (int i = 0; i < total_size; i++){
-                if (i >= n_body){
-                    ori_data[i].m = 0.0;
-                    ori_data[i].x = 0.0;
-                    ori_data[i].y = 0.0;
-                    ori_data[i].vx = 0.0;
-                    ori_data[i].vy = 0.0;
-                } // pixels that do not exist.
-                ori_data[i].m = total_m[i];
-                ori_data[i].x = total_x[i];
-                ori_data[i].y = total_y[i];
-                ori_data[i].vx = total_vx[i];
-                ori_data[i].vy = total_vy[i];
-            }
+		    for (int i = 0; i < total_size; i++) {
+			if (i >= n_body) {
+			    ori_data[i].m = 0.0;
+			    ori_data[i].x = 0.0;
+			    ori_data[i].y = 0.0;
+			    ori_data[i].vx = 0.0;
+			    ori_data[i].vy = 0.0;
+			} // pixels that do not exist.
+			ori_data[i].m = total_m[i];
+			ori_data[i].x = total_x[i];
+			ori_data[i].y = total_y[i];
+			ori_data[i].vx = total_vx[i];
+			ori_data[i].vy = total_vy[i];
+		    }
 
-            int offset = local_size*my_rank;
-            for (int j = offset; j < std::min(offset + local_size, n_body); j++){
-                ori_data[j].ax = ori_data[j].ay = 0.0;
-                new_data[j] = ori_data[j]; 
-                for (int p = 0; p < n_body; p++){
-                    if (p == j) continue;
-                    interaction(ori_data[j],new_data[j],ori_data[p]);
-                }
-                update_data(new_data[j]);
-            }
+		    int offset = local_size*my_rank;
+		    for (int j = offset; j < std::min(offset + local_size, n_body); j++){
+			ori_data[j].ax = ori_data[j].ay = 0.0;
+			new_data[j] = ori_data[j]; 
+			for (int p = 0; p < n_body; p++){
+			    if (p == j) continue;
+			    interaction(ori_data[j],new_data[j],ori_data[p]);
+			}
+			update_data(new_data[j]);
+		    }
 
-            double* local_x = new double[local_size];
-            double* local_y = new double[local_size];
-            double* local_vx = new double[local_size];
-            double* local_vy = new double[local_size];
-            for (int j = offset; j < std::min(offset + local_size, n_body); j++){
-                local_x[j-offset] = new_data[j].x;
-                local_y[j-offset] = new_data[j].y;
-                local_vx[j-offset] = new_data[j].vx;
-                local_vy[j-offset] = new_data[j].vy;
-            }
+		    double* local_x = new double[local_size];
+		    double* local_y = new double[local_size];
+		    double* local_vx = new double[local_size];
+		    double* local_vy = new double[local_size];
+		    for (int j = offset; j < std::min(offset + local_size, n_body); j++) {
+			local_x[j-offset] = new_data[j].x;
+			local_y[j-offset] = new_data[j].y;
+			local_vx[j-offset] = new_data[j].vx;
+			local_vy[j-offset] = new_data[j].vy;
+		    }
 
-            MPI_Gather(local_x,local_size,MPI_DOUBLE,calc_x,local_size,MPI_DOUBLE,0,MPI_COMM_WORLD);
-            MPI_Gather(local_y,local_size,MPI_DOUBLE,calc_y,local_size,MPI_DOUBLE,0,MPI_COMM_WORLD);
-            MPI_Gather(local_vx,local_size,MPI_DOUBLE,calc_vx,local_size,MPI_DOUBLE,0,MPI_COMM_WORLD);
-            MPI_Gather(local_vy,local_size,MPI_DOUBLE,calc_vy,local_size,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		    MPI_Gather(local_x,local_size,MPI_DOUBLE,calc_x,local_size,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		    MPI_Gather(local_y,local_size,MPI_DOUBLE,calc_y,local_size,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		    MPI_Gather(local_vx,local_size,MPI_DOUBLE,calc_vx,local_size,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		    MPI_Gather(local_vy,local_size,MPI_DOUBLE,calc_vy,local_size,MPI_DOUBLE,0,MPI_COMM_WORLD);
 
-            delete[] local_x;
-            delete[] local_y;
-            delete[] local_vx;
-            delete[] local_vy;
-
-            // MPI_Gather(new_data+offset,local_size,MPI_BODY,ori_data,local_size,MPI_BODY,0,MPI_COMM_WORLD);
-        }
+		    delete[] local_x;
+		    delete[] local_y;
+		    delete[] local_vx;
+		    delete[] local_vy;
+		}
         // TODO End
-    }
+ 	}
 
     delete[] total_m;
     delete[] total_x;
@@ -350,11 +340,11 @@ int main(int argc, char *argv[]) {
     delete[] ori_data;
     delete[] new_data;
 
-	if (my_rank == 0){
-		printf("Student ID: 119010437\n"); // replace it with your student id
-		printf("Name: ZHANG Shiyi\n"); // replace it with your name
+	if (my_rank == 0) {
+		printf("Student ID: 119010545\n"); // replace it with your student id
+		printf("Name: Samuel Theofie\n"); // replace it with your name
 		printf("Assignment 2: N Body Simulation MPI Implementation\n");
-        printf("Total running time: %.3f\n",total_time);
+        	printf("Total running time: %.3f\n",total_time);
 	}
 
 	MPI_Finalize();
